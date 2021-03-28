@@ -1,0 +1,4 @@
+rootProject.name = 'PA3'
+include 'discover'
+include 'process'
+
