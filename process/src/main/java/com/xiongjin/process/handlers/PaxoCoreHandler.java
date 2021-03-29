@@ -60,9 +60,151 @@ public class PaxoCoreHandler {
     private boolean receiveFromMajority = false;
     private final Queue<Transaction> pendingTransaction = new LinkedList<>();
 
-//    public void resetFollowerPaxo() {
-//        acceptVal = "none";
-//    }
+
+    /*
+    * Process all messages from other resources in the application
+    * */
+    public ProcessMessage handleIncomeMessage(String message, int proNum) throws InterruptedException, NoSuchAlgorithmException {
+        int majorityNum;
+        majorityNum = proNum / 2 + 1;
+        ProcessMessage processMessage;
+        ProcessMessage returnMessage;
+        processMessage = gson.fromJson(message, ProcessMessage.class);
+        switch (processMessage.getMessageType()) {
+            case "prepare":
+                if (processMessage.getDepth() >= depth) {
+//                if (processMessage.getDepth() >= ballotNum.getThird()) {
+                    if (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond())) {
+                        ballotNum.setFirst(processMessage.getSeqNum());
+                        ballotNum.setSecond(processMessage.getPro_id());
+                        ballotNum.setThird(processMessage.getDepth());
+                        returnMessage = new ProcessMessage("ACK",
+                                                            ballotNum.getFirst(),
+                                                            ballotNum.getSecond(),
+                                                            ballotNum.getThird(),
+                                                            acceptVal);
+                        return returnMessage;
+                    }
+                } else {
+                    returnMessage = new ProcessMessage("low_depth", -1, processMessage.getPro_id(), depth, "");
+                    return returnMessage;
+                }
+                return null;
+            case "ACK":
+                ACKMajorityCount++;
+
+                // other transactions might be processing in the blockchain network.
+                // current node need to process that transaction before processing current node's transaction.
+                if (!processMessage.getVal().equals("none") && ACKMajorityCount <= majorityNum) {
+                    acceptVal = processMessage.getVal();
+                }
+
+//                System.out.println(">>>> " + ACKMajorityCount + " >>>> " + majorityNum + " >>>> " + ACKMajorityCheck);
+                // More than half of the nodes agree with current node's leader propose
+                // NOTE: current node might or might not propose current node's transaction
+                if (ACKMajorityCount >= majorityNum && !ACKMajorityCheck) {
+                    ACKMajorityCheck = true;
+                    returnMessage = new ProcessMessage("accept",
+                                                        ballotNum.getFirst(),
+                                                        ballotNum.getSecond(),
+                                                        ballotNum.getThird(),
+                                                        acceptVal);
+                    acceptedMajorityCheck = false;
+                    return returnMessage;
+                }
+                return null;
+            case "accept":
+                if ((processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() == ballotNum.getSecond())
+                     || (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond()))) {
+                    acceptNum.setFirst(processMessage.getSeqNum());
+                    acceptNum.setSecond(processMessage.getPro_id());
+                    acceptNum.setThird(processMessage.getDepth());
+                    acceptVal = processMessage.getVal();
+                    returnMessage = new ProcessMessage("accepted",
+                                                        acceptNum.getFirst(),
+                                                        acceptNum.getSecond(),
+                                                        acceptNum.getThird(),
+                                                        acceptVal);
+                    return returnMessage;
+                }
+                return null;
+
+            case "accepted":
+//                majorityNum = proNum / 2 + 1;
+                acceptedMajorityCount++;
+                System.out.println(">>>> " + acceptedMajorityCount + " >>>> " + majorityNum + " >>>> " + acceptedMajorityCheck);
+                if (acceptedMajorityCount >= majorityNum && !acceptedMajorityCheck) {
+                    // at this moment, the new block is created and added into the chain
+                    acceptedMajorityCheck = true;
+                    System.out.println("--> Generating decide message at acceptedMajorityCount " + acceptedMajorityCount);
+                    addBlockToChain(gson.fromJson(processMessage.getVal(), Block.class));
+                    // depth update
+                    returnMessage = new ProcessMessage("decide",
+                                                        ballotNum.getFirst(),
+                                                        ballotNum.getSecond(),
+                                                        ballotNum.getThird(),
+                                                        processMessage.getVal());
+
+                    updateBalanceWithSingleBlock(processMessage.getVal());
+
+                    // reset all the valuables for further processing
+                    acceptVal = "none";
+                    balanceChecking = 0;
+                    ACKMajorityCount = 1;
+                    acceptedMajorityCount = 1;
+
+                    System.out.println("****" + processMessage.getVal());
+                    System.out.println("****" + initVal);
+                    System.out.println("**** clean list check " + processMessage.getVal().equals(initVal));
+                    // check if current node is promoting the current node's transaction
+                    if (processMessage.getVal().equals(initVal)) {
+                        pendingTransaction.clear();
+                    }
+
+                    return returnMessage;
+                }
+                return null;
+
+            case "decide":
+                addBlockToChain(gson.fromJson(processMessage.getVal(), Block.class));
+                acceptVal = "none";
+
+                System.out.println("****" + processMessage.getVal());
+                System.out.println("****" + initVal);
+                if (processMessage.getVal().equals(initVal)) {
+                    pendingTransaction.clear();
+                }
+                updateBalanceWithSingleBlock(processMessage.getVal());
+                return null;
+
+            case "low_depth":
+                returnMessage = new ProcessMessage("need_update", -1, -1, processMessage.getDepth(), "");
+                System.out.println("--> Clean pending transactions");
+                pendingTransaction.clear();
+                return returnMessage;
+
+            case "fail_link":
+            case "fix_link":
+            case "fail_process":
+            case "fix_process":
+                return processMessage;
+            case "request_blockchain":
+                processMessage.setMessageType("latest_blockchain");
+                processMessage.setDepth(depth);
+                processMessage.setVal(gson.toJson(blockChain));
+                return processMessage;
+
+            case "latest_blockchain":
+                updateLatestBlockchain(processMessage.getVal());
+                depth = processMessage.getDepth();
+//                Block block = gson.fromJson(processMessage.getVal(), Block.class);
+//                this.blockChain = block;
+                System.out.println("--> Updated latest blockchain");
+                return null;
+            default:
+                return null;
+        }
+    }
 
     public boolean addTransaction(Transaction t) {
         balanceChecking += t.getAmt();
@@ -75,8 +217,31 @@ public class PaxoCoreHandler {
         }
     }
 
+    // Printing function section
+    public void printBlockChain() {
+        System.out.println("==> Print Block Chain: ");
+        if (blockChain != null) {
+            System.out.println(blockChain.toString());
+        } else {
+            System.out.println("There is no block");
+        }
+    }
+
+    public void printBalance() {
+        System.out.println("==> Print Balance: $" + balance);
+    }
+
+    public void printPendingQueue() {
+        if (!pendingTransaction.isEmpty()) {
+            TransactionsHandler th = new TransactionsHandler();
+            String output = th.transacListToString(new ArrayList(pendingTransaction));
+            System.out.println(output);
+        }
+    }
+    // End of print function block
 
 
+    // Getter section
     public String getPrepareMessage() throws NoSuchAlgorithmException {
         System.out.println("--> Get prepare message");
         String message;
@@ -85,10 +250,10 @@ public class PaxoCoreHandler {
         ballotNum.setSecond(id);
         ballotNum.setThird(depth);
         processMessage = new ProcessMessage("prepare",
-                                            ballotNum.getFirst(),
-                                            ballotNum.getSecond(),
-                                            ballotNum.getThird(),
-                                            acceptVal);
+            ballotNum.getFirst(),
+            ballotNum.getSecond(),
+            ballotNum.getThird(),
+            acceptVal);
         message = gson.toJson(processMessage);
 
         initVal = generateAcceptVal();
@@ -99,9 +264,23 @@ public class PaxoCoreHandler {
         } else {
             return null;
         }
-//        return message;
     }
 
+    public int sizeOfPendingQueue() {
+        return pendingTransaction.size();
+    }
+
+    public boolean pendingQueueIsEmpty() {
+        return pendingTransaction.isEmpty();
+    }
+
+    public int getDepth() {
+        return depth;
+    }
+    // End getter section
+
+
+    // Helper function section
     private String generateAcceptVal() throws NoSuchAlgorithmException {
         System.out.println("--> Generate acceptVal");
         String result = null;
@@ -135,150 +314,6 @@ public class PaxoCoreHandler {
         return result;
     }
 
-    public ProcessMessage handleIncomeMessage(String message, int proNum) throws InterruptedException, NoSuchAlgorithmException {
-        int majorityNum;
-        majorityNum = proNum / 2 + 1;
-        ProcessMessage processMessage;
-        ProcessMessage returnMessage;
-        processMessage = gson.fromJson(message, ProcessMessage.class);
-        switch (processMessage.getMessageType()) {
-            case "prepare":
-                if (processMessage.getDepth() >= depth) {
-//                if (processMessage.getDepth() >= ballotNum.getThird()) {
-                    if (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond())) {
-                        ballotNum.setFirst(processMessage.getSeqNum());
-                        ballotNum.setSecond(processMessage.getPro_id());
-                        ballotNum.setThird(processMessage.getDepth());
-                        returnMessage = new ProcessMessage("ACK",
-                                                            ballotNum.getFirst(),
-                                                            ballotNum.getSecond(),
-                                                            ballotNum.getThird(),
-                                                            acceptVal);
-                        return returnMessage;
-                    }
-                } else {
-                    returnMessage = new ProcessMessage("low_depth",
-                            -1,
-                            processMessage.getPro_id(),
-                            depth,
-                            "");
-                    return returnMessage;
-                }
-                return null;
-            case "ACK":
-                ACKMajorityCount++;
-
-                if (!processMessage.getVal().equals("none") && ACKMajorityCount <= majorityNum) {
-                    acceptVal = processMessage.getVal();
-                }
-
-//                System.out.println(">>>> " + ACKMajorityCount + " >>>> " + majorityNum + " >>>> " + ACKMajorityCheck);
-                if (ACKMajorityCount >= majorityNum && !ACKMajorityCheck) {
-                    ACKMajorityCheck = true;
-                    returnMessage = new ProcessMessage("accept",
-                                                        ballotNum.getFirst(),
-                                                        ballotNum.getSecond(),
-                                                        ballotNum.getThird(),
-                                                        acceptVal);
-                    acceptedMajorityCheck = false;
-                    return returnMessage;
-                }
-                return null;
-            case "accept":
-                if ((processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() == ballotNum.getSecond())
-                     || (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond()))) {
-                    acceptNum.setFirst(processMessage.getSeqNum());
-                    acceptNum.setSecond(processMessage.getPro_id());
-                    acceptNum.setThird(processMessage.getDepth());
-                    acceptVal = processMessage.getVal();
-                    returnMessage = new ProcessMessage("accepted",
-                                                        acceptNum.getFirst(),
-                                                        acceptNum.getSecond(),
-                                                        acceptNum.getThird(),
-                                                        acceptVal);
-                    return returnMessage;
-                }
-                return null;
-
-            case "accepted":
-//                majorityNum = proNum / 2 + 1;
-                acceptedMajorityCount++;
-                System.out.println(">>>> " + acceptedMajorityCount + " >>>> " + majorityNum + " >>>> " + acceptedMajorityCheck);
-                if (acceptedMajorityCount >= majorityNum && !acceptedMajorityCheck) {
-                    acceptedMajorityCheck = true;
-                    System.out.println("--> Generating decide message at acceptedMajorityCount " + acceptedMajorityCount);
-                    addBlockToChain(gson.fromJson(processMessage.getVal(), Block.class));
-                    // depth update
-                    returnMessage = new ProcessMessage("decide",
-                                                        ballotNum.getFirst(),
-                                                        ballotNum.getSecond(),
-                                                        ballotNum.getThird(),
-                                                        processMessage.getVal());
-
-                    updateBalanceWithSingleBlock(processMessage.getVal());
-
-                    acceptVal = "none";
-                    balanceChecking = 0;
-                    ACKMajorityCount = 1;
-                    acceptedMajorityCount = 1;
-
-                    System.out.println("****" + processMessage.getVal());
-                    System.out.println("****" + initVal);
-                    System.out.println("**** clean list check " + processMessage.getVal().equals(initVal));
-                    if (processMessage.getVal().equals(initVal)) {
-                        pendingTransaction.clear();
-                    }
-
-                    return returnMessage;
-                }
-                return null;
-
-            case "decide":
-                addBlockToChain(gson.fromJson(processMessage.getVal(), Block.class));
-                // reset follower paxo
-                acceptVal = "none";
-
-                System.out.println("****" + processMessage.getVal());
-                System.out.println("****" + initVal);
-                if (processMessage.getVal().equals(initVal)) {
-                    pendingTransaction.clear();
-                }
-                updateBalanceWithSingleBlock(processMessage.getVal());
-                return null;
-
-            case "low_depth":
-                returnMessage = new ProcessMessage("need_update",
-                        -1,
-                        -1,
-                        processMessage.getDepth(),
-                        "");
-                System.out.println("--> Clean pending transactions");
-                pendingTransaction.clear();
-                return returnMessage;
-
-            case "fail_link":
-            case "fix_link":
-            case "fail_process":
-            case "fix_process":
-                return processMessage;
-            case "request_blockchain":
-                processMessage.setMessageType("latest_blockchain");
-                processMessage.setDepth(depth);
-                processMessage.setVal(gson.toJson(blockChain));
-                return processMessage;
-
-            case "latest_blockchain":
-                updateLatestBlockchain(processMessage.getVal());
-                depth = processMessage.getDepth();
-//                Block block = gson.fromJson(processMessage.getVal(), Block.class);
-//                this.blockChain = block;
-                System.out.println("--> Updated latest blockchain");
-                return null;
-            default:
-                return null;
-        }
-    }
-
     private void addBlockToChain(Block block) {
         Block newBlock = block;
         if (blockChain != null) {
@@ -289,41 +324,6 @@ public class PaxoCoreHandler {
         depth++;
         blockChain = newBlock;
     }
-
-
-    public void printBlockChain() {
-        System.out.println("==> Print Block Chain: ");
-        if (blockChain != null) {
-            System.out.println(blockChain.toString());
-        } else {
-            System.out.println("There is no block");
-        }
-    }
-
-    public void printBalance() {
-        System.out.println("==> Print Balance: $" + balance);
-    }
-
-    public void printPendingQueue() {
-        if (!pendingTransaction.isEmpty()) {
-            TransactionsHandler th = new TransactionsHandler();
-            String output = th.transacListToString(new ArrayList(pendingTransaction));
-            System.out.println(output);
-        }
-    }
-
-    public int sizeOfPendingQueue() {
-        return pendingTransaction.size();
-    }
-
-    public boolean pendingQueueIsEmpty() {
-        return pendingTransaction.isEmpty();
-    }
-
-    public int getDepth() {
-        return depth;
-    }
-
 
     private void updateLatestBlockchain(String val) {
         Block latestBlockchain = gson.fromJson(val, Block.class);
@@ -367,5 +367,6 @@ public class PaxoCoreHandler {
             }
         }
     }
+    // End of helper function section
 }
 

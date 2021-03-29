@@ -58,10 +58,8 @@ public class ConnectionHandler {
     private static final Queue<String> userEventQueue= new LinkedList<>();
     private Gson gson = new Gson();
 
-    /*
-    * All functions related to the connection and message transferring
-    * */
 
+    // All functions related to the connection and message transferring
     public ConnectionHandler (String id, String port) throws UnknownHostException {
         this.id = Integer.parseInt(id);
         this.port = Integer.parseInt(port);
@@ -330,23 +328,17 @@ public class ConnectionHandler {
     * User interaction thread grape user's action (event) and add it into event queue by using this function
     * */
     public static void addUserEvent(String userEvent){
-//        if (allowAddingTransac) {
-            userEventQueue.add(userEvent);
-//        }
+        userEventQueue.add(userEvent);
     }
-
-    /*
-    * End of all functions related to the connection and message transferring
-    * */
+    //End of all functions related to the connection and message transferring
 
 
 
-    /*
-    * All functions related to Blockchain protocol
-    * */
-
+    // All functions related to Blockchain protocol
     private void startLeaderElection() {
+        // check if leader election is started or not
         if (PaxoCoreHandler.getInstance().sizeOfPendingQueue() == 1 && !timered) {
+            // generate random wait time
             int waitTime;
             Random random = new Random();
             TimerTask timerTask1 = new TimerTask() {
@@ -369,7 +361,9 @@ public class ConnectionHandler {
 
             waitTime = random.nextInt(5) + 10;
             System.out.println("Random wait time " + waitTime + " sec");
+            // timer1: pause then leader election
             timer1.schedule(timerTask1, waitTime * 1000);
+            // my transaction might or might not promoted, double check after some seconds
             timer2.schedule(timerTask2,35000);
             timered = true;
         }
@@ -551,39 +545,6 @@ public class ConnectionHandler {
         System.out.println(outstreamList.values());
         System.out.println("==> Processes in the net: " + proNum);
     }
-
-    /*
-    * End of functions related to Blockchain protocol
-    * */
-
-
-
-//    private void disconnectLinkSender(int des_id) throws IOException {
-//        DataOutputStream dos;
-//        ProcessMessage processMessage;
-//        dos = outstreamList.get(des_id);
-//
-//        processMessage = new ProcessMessage("fail_link", id, des_id, -1, "");
-//        dos.writeUTF(gson.toJson(processMessage));
-//        System.out.println("Disconnected from " + id + " to " + des_id);
-//        outstreamList.put(des_id, null);
-//        instreamList.put(des_id, null);
-//
-//        System.out.println(instreamList.keySet());
-//        System.out.println(instreamList.values());
-//        System.out.println(outstreamList.keySet());
-//        System.out.println(outstreamList.values());
-//    }
-//
-//    private void disconnectLinkReciver(int des_id) {
-//        System.out.println("Disconnected from " + id + " to " + des_id);
-//        outstreamList.put(des_id, null);
-//        instreamList.put(des_id, null);
-//
-//        System.out.println(instreamList.keySet());
-//        System.out.println(instreamList.values());
-//        System.out.println(outstreamList.keySet());
-//        System.out.println(outstreamList.values());
-//    }
+    //End of functions related to Blockchain protocol
 }
 
