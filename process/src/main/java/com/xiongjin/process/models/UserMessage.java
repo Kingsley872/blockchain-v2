@@ -1,5 +1,9 @@
 package com.xiongjin.process.models;
 
+/*
+* User Message Model
+* */
+
 public class UserMessage {
     private String messageType;
     private String src_id;

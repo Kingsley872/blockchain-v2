@@ -8,6 +8,22 @@ import com.xiongjin.process.models.UserMessage;
 import java.util.Scanner;
 import java.util.StringTokenizer;
 
+/*
+* User interaction runnable
+* Contains: all the command of the application
+* Functionality;
+*   1. print current node id
+*   2. make a transfer
+*   3. fail a connection between two nodes
+*   4. fix the connection between two nodes
+*   5. update a node's blockchain information from other nodes
+*   6. print blockchain
+*   7. print balance
+*   8. shut down(offline) a node - (unstable)
+*   9. wake (online) a node - (unstable)
+*   10. print the process queue
+* */
+
 public class UserInteraction implements Runnable {
 
     @Override
@@ -108,7 +124,7 @@ public class UserInteraction implements Runnable {
                     ConnectionHandler.addUserEvent(gson.toJson(userMessage));
                     break;
                 default:
-                    System.out.println("--> Wrong command!");
+                    System.out.println("--> Wrong command! Try again");
                     break;
             }
         }

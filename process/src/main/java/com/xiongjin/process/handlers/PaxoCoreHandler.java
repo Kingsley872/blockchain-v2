@@ -75,9 +75,7 @@ public class PaxoCoreHandler {
         }
     }
 
-    public int sizeOfPendingQueue() {
-        return pendingTransaction.size();
-    }
+
 
     public String getPrepareMessage() throws NoSuchAlgorithmException {
         System.out.println("--> Get prepare message");
@@ -187,7 +185,8 @@ public class PaxoCoreHandler {
                 }
                 return null;
             case "accept":
-                if ((processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() == ballotNum.getSecond()) || (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond()))) {
+                if ((processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() == ballotNum.getSecond())
+                     || (processMessage.getSeqNum() > ballotNum.getFirst() || (processMessage.getSeqNum() == ballotNum.getFirst() && processMessage.getPro_id() > ballotNum.getSecond()))) {
                     acceptNum.setFirst(processMessage.getSeqNum());
                     acceptNum.setSecond(processMessage.getPro_id());
                     acceptNum.setThird(processMessage.getDepth());
@@ -292,7 +291,6 @@ public class PaxoCoreHandler {
     }
 
 
-
     public void printBlockChain() {
         System.out.println("==> Print Block Chain: ");
         if (blockChain != null) {
@@ -312,6 +310,10 @@ public class PaxoCoreHandler {
             String output = th.transacListToString(new ArrayList(pendingTransaction));
             System.out.println(output);
         }
+    }
+
+    public int sizeOfPendingQueue() {
+        return pendingTransaction.size();
     }
 
     public boolean pendingQueueIsEmpty() {

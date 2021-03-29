@@ -1,5 +1,10 @@
 package com.xiongjin.process.models;
 
+/*
+* Transaction Model
+*   Format: <sender_id, receiver_id, amount>
+* */
+
 public class Transaction {
     private int senderId;
     private int receiverId;

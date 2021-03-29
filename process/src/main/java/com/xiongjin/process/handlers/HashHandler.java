@@ -5,6 +5,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+/*
+* Hash handler
+*   Responsible for generating hash value
+* */
+
 public class HashHandler {
     public HashHandler() {}
 

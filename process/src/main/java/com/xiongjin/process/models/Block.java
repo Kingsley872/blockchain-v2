@@ -2,6 +2,12 @@ package com.xiongjin.process.models;
 
 import java.util.ArrayList;
 
+/*
+* Block Model
+* The blockchain representation can be seen as linked-list
+* In Java, it can be seen as a block contains another block.
+* */
+
 public class Block {
 
     private Block previousBlock;

@@ -8,6 +8,12 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Random;
 
+/*
+* Nonce Handler
+*   Responsible for finding a hash value which satisfied some conditions
+*   In this case, the last character in the hash value must equals to 1, 2, 3, or 4
+* */
+
 public class NonceHandler {
 
     private final int nonceLength;

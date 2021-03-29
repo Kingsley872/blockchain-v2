@@ -16,6 +16,10 @@ import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
+/*
+* Connection Handler handles all connection operations
+*   it is also a transfer center all messages including messages from node to node, and user to the application
+* */
 public class ConnectionHandler {
 
     private int id;
@@ -29,6 +33,9 @@ public class ConnectionHandler {
     private boolean timered = false ;
 //    private static boolean allowAddingTransac = true;
     private boolean processIsFail;
+
+    // Information: all nodes in the network
+    // normally it is from discover server. It is hard coded because of testing reason.
     private final HashMap<Integer, Integer> proInfoList = new HashMap<Integer, Integer>() {
         {
             put(1, 1234);
@@ -39,13 +46,21 @@ public class ConnectionHandler {
         }
     };
 
+    // All the input stream and output objects from all connection
     private final HashMap<Integer, DataOutputStream> outstreamList = new HashMap<>();
     private final HashMap<Integer, DataInputStream> instreamList = new HashMap<>();
+    // this is the copy of all input stream and output stream
+    // those two copies only for disconnecting operation.
     private HashMap<Integer, DataOutputStream> outstreamListCopy;
     private HashMap<Integer, DataInputStream> instreamListCopy;
 
+    // User actions are converted into events, and events are store here
     private static final Queue<String> userEventQueue= new LinkedList<>();
     private Gson gson = new Gson();
+
+    /*
+    * All functions related to the connection and message transferring
+    * */
 
     public ConnectionHandler (String id, String port) throws UnknownHostException {
         this.id = Integer.parseInt(id);
@@ -60,15 +75,20 @@ public class ConnectionHandler {
     public void start() throws IOException, InterruptedException {
 //        identifyMyself();
         System.out.println("==> My id: " + id + " My portNum: " + port);
+        // each node creates a listener thread to take care of incoming connecting requests
         createConnectListenerRunnable();
+        // wait until all nodes are activated
         Thread.sleep(20000);
+        // connection nodes base on the all nodes information "proInfoList"
         connectEachOther();
 
+        // pause little bit for debugging reason
         while (instreamList.size() != 4 || outstreamList.size() != 4) {
             // wait
             Thread.sleep(500);
         }
 
+        // Display information of all connection after done connecting process
         System.out.println("==> Done connect to each other ");
         System.out.println(instreamList.keySet());
         System.out.println(outstreamList.keySet());
@@ -76,11 +96,10 @@ public class ConnectionHandler {
         instreamListCopy = new HashMap(instreamList);
 
         startUserListener();
-
     }
 
-
     private void createConnectListenerRunnable() throws IOException {
+        // each node is acting like a server to accept connection request
         System.out.println("==> Create connection Listener");
         final ServerSocket serverSocket = new ServerSocket(this.port);
         Thread connectionListener = new Thread(() -> {
@@ -89,12 +108,16 @@ public class ConnectionHandler {
             DataInputStream dis;
             while (true) {
                 try {
+                    // open socket and make connections based on incoming requests
                     socket = serverSocket.accept();
                     dis = new DataInputStream(socket.getInputStream());
                     message = dis.readUTF();
 
                     instreamList.put(Integer.parseInt(message), dis);
                     System.out.println("Connection: " + message + "->" + id);
+
+                    // for each incoming connection, a message listener is created
+                    // this is for disconnect operation
                     createMessageListenerRunnable(dis);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -104,6 +127,12 @@ public class ConnectionHandler {
         connectionListener.start();
     }
 
+    /*
+    * Create listening thread for each connection
+    *   1. the incoming process is passed into Paxo core handler
+    *   2. the Paxo core handler process the incoming messages and pass the result back to here
+    *   3. the listener sends result back to the sender
+    * */
     private void createMessageListenerRunnable(DataInputStream dis) {
         System.out.println("==> Connect to other as client");
         Thread messageListener = new Thread(() -> {
@@ -115,8 +144,10 @@ public class ConnectionHandler {
                         message = dis.readUTF();
                         System.out.println("==> Get message: " + message);
                         Thread.sleep(5000);
+                        // NOTE: the listener does not need to know what is the message
                         processMessage = PaxoCoreHandler.getInstance().handleIncomeMessage(message, proNum);
 
+                        // NOTE: the listener take care of the processed result based on Paxo core handler's command.
                         if (processMessage != null) {
                             switch (processMessage.getMessageType()) {
                                 case "ACK":
@@ -171,6 +202,9 @@ public class ConnectionHandler {
         messageListener.start();
     }
 
+    /*
+    * Sends connecting requests except itself
+    * */
     private void connectEachOther() throws IOException, InterruptedException {
         DataOutputStream dos;
         for (int i = 1; i <= MAX_NODES; i++) {
@@ -185,6 +219,11 @@ public class ConnectionHandler {
         }
     }
 
+    /*
+    *  Creates user listening thread
+    *   1. it transfers user events into Paxo core handler
+    *   2. Paxo core handler's process user message and sends to other components
+    * */
     private void startUserListener() {
         System.out.println("==> Start user listener thread");
         Gson gson = new Gson();
@@ -287,16 +326,24 @@ public class ConnectionHandler {
         userListener.start();
     }
 
+    /*
+    * User interaction thread grape user's action (event) and add it into event queue by using this function
+    * */
     public static void addUserEvent(String userEvent){
 //        if (allowAddingTransac) {
             userEventQueue.add(userEvent);
 //        }
     }
 
+    /*
+    * End of all functions related to the connection and message transferring
+    * */
 
 
 
-
+    /*
+    * All functions related to Blockchain protocol
+    * */
 
     private void startLeaderElection() {
         if (PaxoCoreHandler.getInstance().sizeOfPendingQueue() == 1 && !timered) {
@@ -504,6 +551,12 @@ public class ConnectionHandler {
         System.out.println(outstreamList.values());
         System.out.println("==> Processes in the net: " + proNum);
     }
+
+    /*
+    * End of functions related to Blockchain protocol
+    * */
+
+
 
 //    private void disconnectLinkSender(int des_id) throws IOException {
 //        DataOutputStream dos;

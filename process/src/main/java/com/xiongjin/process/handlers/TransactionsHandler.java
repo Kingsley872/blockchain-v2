@@ -4,6 +4,11 @@ import com.xiongjin.process.models.Transaction;
 
 import java.util.ArrayList;
 
+/*
+* Transaction Handler
+*   It changes the transaction list into readable format.
+* */
+
 public class TransactionsHandler {
 
     public TransactionsHandler() {}
