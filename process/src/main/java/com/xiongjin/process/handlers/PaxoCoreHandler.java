@@ -197,8 +197,8 @@ public class PaxoCoreHandler {
             case "latest_blockchain":
                 updateLatestBlockchain(processMessage.getVal());
                 depth = processMessage.getDepth();
-//                Block block = gson.fromJson(processMessage.getVal(), Block.class);
-//                this.blockChain = block;
+                Block block = gson.fromJson(processMessage.getVal(), Block.class);
+                this.blockChain = block;
                 System.out.println("--> Updated latest blockchain");
                 return null;
             default:
