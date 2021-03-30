@@ -8,5 +8,5 @@ This is second version of the simplified Blockchain using Paxos as a consensus p
 ![hash](./demo/hash.png)
 ---
 # Threads and Main Components
-![components](./demo/threads_and_ component.png)
+![components](./demo/threads_and_component.png)
 
